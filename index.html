@@ -50,8 +50,8 @@
   .btn.primary{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:700}
   .btn.primary:hover{background:var(--amber-soft)}
 
-  main{flex:1;position:relative}
-  canvas{display:block}
+  main{flex:1;position:relative;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 
   /* Stats HUD */
   .hud{
@@ -211,9 +211,11 @@ function initScene(){
   animate();
 }
 function resize(){
-  const w = canvas.clientWidth = innerWidth;
-  const h = canvas.clientHeight = innerHeight - document.querySelector('header').offsetHeight;
-  renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  const main = canvas.parentElement;
+  const w = main.clientWidth, h = main.clientHeight;
+  if(!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
 }
 function animate(){
   requestAnimationFrame(animate);
