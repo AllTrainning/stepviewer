@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>STEP Viewer · Visor CAD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0e11; --bg2:#111418; --panel:#15191f; --line:#262c34;
+    --ink:#e7ecf2; --dim:#7e8794; --amber:#ffb000; --amber-soft:#ffce6b; --cyan:#4fd6ff;
+    --ok:#7be08a; --err:#ff6b6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(120% 90% at 80% -10%, #1a1f27 0%, transparent 55%),
+      radial-gradient(100% 80% at 0% 110%, #15110a 0%, transparent 50%),
+      var(--bg);
+    color:var(--ink); font-family:"JetBrains Mono",monospace; overflow:hidden;
+  }
+  #app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+  /* Top bar */
+  header{
+    display:flex;align-items:center;gap:14px;padding:12px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,176,0,.04),transparent);
+    backdrop-filter:blur(6px); z-index:5;
+  }
+  .logo{display:flex;align-items:center;gap:11px}
+  .dot{width:11px;height:11px;border-radius:2px;background:var(--amber);
+    box-shadow:0 0 14px var(--amber);animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  h1{font-family:"Archivo",sans-serif;font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase}
+  h1 span{color:var(--amber)}
+  .tag{font-size:10px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;border:1px solid var(--line);padding:3px 8px;border-radius:4px}
+  header .grow{flex:1}
+  .btn{
+    font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+    background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    padding:8px 12px;border-radius:6px;transition:.15s;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--amber);color:var(--amber-soft)}
+  .btn.on{background:rgba(255,176,0,.12);border-color:var(--amber);color:var(--amber)}
+  .btn.primary{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:700}
+  .btn.primary:hover{background:var(--amber-soft)}
+
+  main{flex:1;position:relative}
+  canvas{display:block}
+
+  /* Stats HUD */
+  .hud{
+    position:absolute;top:16px;left:16px;width:248px;
+    background:rgba(17,20,24,.82);border:1px solid var(--line);border-radius:10px;
+    backdrop-filter:blur(10px);padding:14px 14px 6px;font-size:11.5px;z-index:4;
+    box-shadow:0 18px 50px -20px rgba(0,0,0,.8);
+  }
+  .hud h2{font-family:"Archivo",sans-serif;font-size:10px;letter-spacing:.2em;color:var(--amber);
+    text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+  .hud h2::before{content:"";width:5px;height:5px;background:var(--amber);border-radius:50%}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #20262e}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--dim);letter-spacing:.04em}
+  .row .v{color:var(--ink);font-weight:500}
+  .row .v.cyan{color:var(--cyan)}
+  .dims{display:flex;gap:6px;margin-top:4px}
+  .dims div{flex:1;background:#0f1318;border:1px solid var(--line);border-radius:6px;padding:7px 4px;text-align:center}
+  .dims .ax{font-size:9px;color:var(--dim);letter-spacing:.1em}
+  .dims .mm{font-size:13px;font-weight:700;margin-top:2px}
+  .dims .x .mm{color:#ff7a7a}.dims .y .mm{color:#7be08a}.dims .z .mm{color:#5fa8ff}
+
+  /* Bottom controls */
+  .toolbar{
+    position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;background:rgba(17,20,24,.85);border:1px solid var(--line);
+    padding:8px;border-radius:12px;backdrop-filter:blur(10px);z-index:4;flex-wrap:wrap;justify-content:center;max-width:94vw;
+    box-shadow:0 18px 50px -20px rgba(0,0,0,.8);
+  }
+
+  /* Dropzone / states */
+  .center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:none}
+  .drop{
+    pointer-events:auto;width:min(520px,86vw);border:1.5px dashed #313945;border-radius:18px;
+    padding:46px 36px;text-align:center;background:rgba(17,20,24,.6);backdrop-filter:blur(8px);
+    transition:.2s;cursor:pointer;
+  }
+  .drop.hot{border-color:var(--amber);background:rgba(255,176,0,.06);transform:scale(1.01)}
+  .drop .ico{font-size:42px;margin-bottom:14px;filter:grayscale(.2)}
+  .drop h3{font-family:"Archivo",sans-serif;font-size:18px;font-weight:800;letter-spacing:.02em;margin-bottom:8px}
+  .drop p{color:var(--dim);font-size:12.5px;line-height:1.7}
+  .drop .fmt{margin-top:14px;font-size:10.5px;color:var(--dim);letter-spacing:.14em}
+  .hide{display:none!important}
+  .spinner{width:34px;height:34px;border:3px solid #2a313b;border-top-color:var(--amber);border-radius:50%;
+    margin:0 auto 16px;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loadbox{pointer-events:auto;text-align:center;background:rgba(17,20,24,.82);border:1px solid var(--line);
+    border-radius:14px;padding:30px 40px;backdrop-filter:blur(8px)}
+  .loadbox p{color:var(--dim);font-size:12px;letter-spacing:.06em;margin-top:6px}
+  .loadbox .big{font-family:"Archivo",sans-serif;font-weight:700;font-size:14px;color:var(--amber-soft);letter-spacing:.1em}
+  .err{color:var(--err)}
+  .hint{position:absolute;bottom:74px;left:50%;transform:translateX(-50%);font-size:10.5px;color:var(--dim);letter-spacing:.08em;z-index:3;text-align:center;width:90%}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo"><span class="dot"></span>
+      <h1>STEP<span>·</span>VIEWER</h1>
+    </div>
+    <span class="tag" id="fileTag">sin archivo</span>
+    <div class="grow"></div>
+    <button class="btn primary" id="openBtn">Abrir STEP</button>
+    <input type="file" id="fileInput" accept=".step,.stp,.STEP,.STP" class="hide">
+  </header>
+
+  <main>
+    <canvas id="c"></canvas>
+
+    <!-- HUD -->
+    <div class="hud hide" id="hud">
+      <h2>Métricas del modelo</h2>
+      <div class="row"><span class="k">Sólidos / mallas</span><span class="v" id="mMeshes">–</span></div>
+      <div class="row"><span class="k">Triángulos</span><span class="v" id="mTris">–</span></div>
+      <div class="row"><span class="k">Vértices</span><span class="v" id="mVerts">–</span></div>
+      <div class="row"><span class="k">Volumen bbox</span><span class="v cyan" id="mVol">–</span></div>
+      <div class="dims">
+        <div class="x"><div class="ax">X mm</div><div class="mm" id="dX">–</div></div>
+        <div class="y"><div class="ax">Y mm</div><div class="mm" id="dY">–</div></div>
+        <div class="z"><div class="ax">Z mm</div><div class="mm" id="dZ">–</div></div>
+      </div>
+    </div>
+
+    <!-- Center states -->
+    <div class="center" id="centerState">
+      <div class="drop" id="drop">
+        <div class="ico">◳</div>
+        <h3>Arrastra tu archivo .STEP aquí</h3>
+        <p>O haz clic para seleccionarlo.<br>Todo se procesa en tu navegador — nada se sube a ningún servidor.</p>
+        <div class="fmt">FORMATOS · STEP · STP · ISO-10303-21</div>
+      </div>
+    </div>
+    <div class="center hide" id="loadState">
+      <div class="loadbox">
+        <div class="spinner"></div>
+        <div class="big" id="loadMsg">Inicializando OpenCascade…</div>
+        <p>Teselando geometría B-Rep</p>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar hide" id="toolbar">
+      <button class="btn" id="tRotate">Rotación auto</button>
+      <button class="btn on" id="tEdges">Aristas</button>
+      <button class="btn" id="tWire">Wireframe</button>
+      <button class="btn" id="tGrid">Rejilla</button>
+      <button class="btn" id="tBg">Fondo</button>
+      <button class="btn" id="tFit">Encuadrar</button>
+      <button class="btn" id="tShot">Captura PNG</button>
+    </div>
+    <div class="hint hide" id="hint">Arrastra para rotar · rueda para zoom · clic derecho para desplazar</div>
+  </main>
+</div>
+
+<!-- OpenCascade (WASM) -->
+<script src="https://unpkg.com/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
+<!-- three.js como módulo -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const canvas = $('c');
+
+// ---------- escena ----------
+let renderer, scene, camera, controls, grid, modelGroup = null;
+let autoRotate = false, showEdges = true, showWire = false, showGrid = false, darkBg = true;
+const BG_DARK = 0x0c0e11, BG_LIGHT = 0xe9edf2;
+
+function initScene(){
+  renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(BG_DARK, 1);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1e6);
+  camera.position.set(120,90,160);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = .08;
+
+  scene.add(new THREE.AmbientLight(0xffffff, .55));
+  const hemi = new THREE.HemisphereLight(0xdfeaff, 0x20140a, .55); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffffff, 1.0); key.position.set(1,1.4,1); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffce6b, .45); fill.position.set(-1,.4,-1); scene.add(fill);
+
+  grid = new THREE.GridHelper(400, 40, 0x3a4250, 0x1c222b);
+  grid.visible = false; scene.add(grid);
+
+  resize(); window.addEventListener('resize', resize);
+  animate();
+}
+function resize(){
+  const w = canvas.clientWidth = innerWidth;
+  const h = canvas.clientHeight = innerHeight - document.querySelector('header').offsetHeight;
+  renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+function animate(){
+  requestAnimationFrame(animate);
+  if(autoRotate && modelGroup) modelGroup.rotation.y += .005;
+  controls.update(); renderer.render(scene,camera);
+}
+
+// ---------- carga STEP ----------
+let occt = null;
+async function getOcct(){
+  if(occt) return occt;
+  occt = await window.occtimportjs({
+    locateFile:()=> "https://unpkg.com/occt-import-js@0.0.23/dist/occt-import-js.wasm"
+  });
+  return occt;
+}
+
+async function loadStep(buffer, name){
+  showState('load'); $('loadMsg').textContent = "Inicializando OpenCascade…";
+  try{
+    const lib = await getOcct();
+    $('loadMsg').textContent = "Teselando geometría…";
+    await new Promise(r=>setTimeout(r,40));
+    const result = lib.ReadStepFile(new Uint8Array(buffer), null);
+    if(!result || !result.success || !result.meshes.length) throw new Error("No se pudo leer el STEP o no contiene geometría.");
+    buildModel(result.meshes, name);
+  }catch(e){
+    $('loadMsg').innerHTML = '<span class="err">Error: '+ (e.message||e) +'</span>';
+    setTimeout(()=>{ if(!modelGroup) showState('drop'); }, 2600);
+  }
+}
+
+const palette = [0x9aa7b5,0xb8a07a,0x8fb39a,0xa898b8,0x7a9bb8];
+function buildModel(meshes, name){
+  if(modelGroup){ scene.remove(modelGroup); }
+  modelGroup = new THREE.Group();
+  let tris=0, verts=0, i=0;
+
+  for(const m of meshes){
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(m.attributes.position.array, 3));
+    if(m.attributes.normal) g.setAttribute('normal', new THREE.Float32BufferAttribute(m.attributes.normal.array,3));
+    else g.computeVertexNormals();
+    const idx = Uint32Array.from(m.index.array);
+    g.setIndex(new THREE.BufferAttribute(idx,1));
+
+    const col = m.color ? new THREE.Color(m.color[0],m.color[1],m.color[2]) : new THREE.Color(palette[i%palette.length]);
+    const mat = new THREE.MeshStandardMaterial({color:col, metalness:.25, roughness:.55, flatShading:false});
+    const mesh = new THREE.Mesh(g, mat); mesh.name='solid'; modelGroup.add(mesh);
+
+    // aristas
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(g, 24),
+      new THREE.LineBasicMaterial({color:0x0a0c0f, transparent:true, opacity:.55})
+    );
+    edges.name='edges'; mesh.add(edges);
+
+    tris += idx.length/3; verts += m.attributes.position.array.length/3; i++;
+  }
+
+  // centrar
+  const box = new THREE.Box3().setFromObject(modelGroup);
+  const size = new THREE.Vector3(), center = new THREE.Vector3();
+  box.getSize(size); box.getCenter(center);
+  modelGroup.position.sub(center);
+  scene.add(modelGroup);
+
+  // grid bajo el modelo
+  grid.position.y = -size.y/2 - 0.5;
+  grid.scale.setScalar(Math.max(size.x,size.z)/200 || 1);
+
+  // stats
+  $('mMeshes').textContent = meshes.length;
+  $('mTris').textContent = tris.toLocaleString('es-MX');
+  $('mVerts').textContent = verts.toLocaleString('es-MX');
+  $('mVol').textContent = (size.x*size.y*size.z).toLocaleString('es-MX',{maximumFractionDigits:0})+' mm³';
+  $('dX').textContent = size.x.toFixed(1);
+  $('dY').textContent = size.y.toFixed(1);
+  $('dZ').textContent = size.z.toFixed(1);
+  $('fileTag').textContent = name;
+
+  fit();
+  showState('view');
+}
+
+function fit(){
+  if(!modelGroup) return;
+  const box = new THREE.Box3().setFromObject(modelGroup);
+  const size = box.getSize(new THREE.Vector3()).length();
+  const center = box.getCenter(new THREE.Vector3());
+  controls.target.copy(center);
+  const dist = size / (2*Math.tan(Math.PI*camera.fov/360)) * 1.25;
+  const dir = new THREE.Vector3(0.7,0.5,1).normalize();
+  camera.position.copy(center).add(dir.multiplyScalar(dist));
+  camera.near = size/100; camera.far = size*100; camera.updateProjectionMatrix();
+  controls.update();
+}
+
+// ---------- estados UI ----------
+function showState(s){
+  $('centerState').classList.toggle('hide', s!=='drop');
+  $('loadState').classList.toggle('hide', s!=='load');
+  const viewing = s==='view';
+  $('hud').classList.toggle('hide', !viewing);
+  $('toolbar').classList.toggle('hide', !viewing);
+  $('hint').classList.toggle('hide', !viewing);
+}
+
+// ---------- inputs ----------
+function handleFile(file){
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = e => loadStep(e.target.result, file.name);
+  r.readAsArrayBuffer(file);
+}
+$('openBtn').onclick = ()=> $('fileInput').click();
+$('drop').onclick = ()=> $('fileInput').click();
+$('fileInput').onchange = e => handleFile(e.target.files[0]);
+
+const drop = $('drop');
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev!=='dragleave'||e.target===drop)drop.classList.remove('hot');}));
+document.addEventListener('drop', e=>{e.preventDefault(); drop.classList.remove('hot'); handleFile(e.dataTransfer.files[0]);});
+
+// ---------- toolbar ----------
+$('tRotate').onclick = e=>{autoRotate=!autoRotate; e.target.classList.toggle('on',autoRotate);};
+$('tEdges').onclick = e=>{showEdges=!showEdges; e.target.classList.toggle('on',showEdges);
+  modelGroup&&modelGroup.traverse(o=>{if(o.name==='edges')o.visible=showEdges;});};
+$('tWire').onclick = e=>{showWire=!showWire; e.target.classList.toggle('on',showWire);
+  modelGroup&&modelGroup.traverse(o=>{if(o.name==='solid')o.material.wireframe=showWire;});};
+$('tGrid').onclick = e=>{showGrid=!showGrid; e.target.classList.toggle('on',showGrid); grid.visible=showGrid;};
+$('tBg').onclick = e=>{darkBg=!darkBg; renderer.setClearColor(darkBg?BG_DARK:BG_LIGHT,1); e.target.classList.toggle('on',!darkBg);};
+$('tFit').onclick = fit;
+$('tShot').onclick = ()=>{ renderer.render(scene,camera);
+  const a=document.createElement('a'); a.download='step_render.png'; a.href=canvas.toDataURL('image/png'); a.click(); };
+
+initScene();
+</script>
+</body>
+</html>
